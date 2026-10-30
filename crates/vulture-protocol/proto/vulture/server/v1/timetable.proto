@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package vulture.server.v1;
+
+// Monday=0; minutes in child's timezone. End before start crosses midnight.
+message TimetableWindow {
+  uint32 day = 1;
+  uint32 start = 2;
+  uint32 end = 3;
+  string kind = 4; // study, allowed, break
+}
+message Timetable {
+  string timezone = 1;
+  repeated TimetableWindow windows = 2;
+  optional string override_until = 3;
+  repeated CalendarEntry entries = 4;
+}
+message GetTimetableRequest {
+  string profile_id = 1;
+}
+message GetTimetableResponse {
+  Timetable timetable = 1;
+}
+message SaveTimetableRequest {
+  string profile_id = 1;
+  Timetable timetable = 2;
+}
+message SaveTimetableResponse {
+  Timetable timetable = 1;
+}
+message OverrideTimetableRequest {
+  string profile_id = 1;
+  uint32 minutes = 2;
+  string reason = 3;
+}
+message OverrideTimetableResponse {
+  Timetable timetable = 1;
+}
+message GetChildPolicyRequest {
+  string activity = 1; // learning, chat, robot; unspecified values are rejected
+}
+message GetChildPolicyResponse {
+  bool allowed = 1;
+  string current_activity = 2;
+  optional string next_allowed_at = 3;
+  string valid_until = 4;
+  string evaluated_at = 5;
+  string timezone = 6;
+}
+
+// Date and clock values are local to the profile timezone. End before start crosses midnight; equal endpoints are rejected.
+message CalendarEntry {
+  string id = 1;
+  string date = 2;
+  uint32 start = 3;
+  uint32 end = 4;
+  string kind = 5; // study, allowed, break, homework, test
+  string title = 6;
+  optional string homework_id = 7;
+}
+message SaveCalendarRequest {
+  string profile_id = 1;
+  repeated CalendarEntry entries = 2;
+}
+message SetProfileTimezoneRequest {
+  string profile_id = 1;
+  string timezone = 2;
+}

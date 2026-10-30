@@ -1,0 +1,182 @@
+syntax = "proto3";
+
+package vulture.server.v1;
+
+import "vulture/server/v1/learning.proto";
+
+// Family-owned AI runs on family devices. The server prepares the prompt from
+// data it already holds and validates the returned output; it never receives
+// family AI keys and never calls family-chosen provider endpoints.
+
+enum FamilyAiJobKind {
+  FAMILY_AI_JOB_KIND_UNSPECIFIED = 0;
+  FAMILY_AI_JOB_KIND_PRACTICE = 1;
+  FAMILY_AI_JOB_KIND_HOMEWORK_DRAFT = 2;
+  FAMILY_AI_JOB_KIND_WORKSHEET_PARSER = 3;
+  // A child asks for help with one question of delivered practice.
+  FAMILY_AI_JOB_KIND_HOMEWORK_HELP = 4;
+}
+
+enum FamilyAiJobStatus {
+  FAMILY_AI_JOB_STATUS_UNSPECIFIED = 0;
+  // Requested by a child whose AI runs on parent devices; a parent must approve.
+  FAMILY_AI_JOB_STATUS_AWAITING_APPROVAL = 1;
+  FAMILY_AI_JOB_STATUS_READY = 2;
+  FAMILY_AI_JOB_STATUS_COMPLETED = 3;
+  FAMILY_AI_JOB_STATUS_CANCELLED = 4;
+  FAMILY_AI_JOB_STATUS_EXPIRED = 5;
+}
+
+// Provider-neutral structured-output request. `user` is untrusted data
+// serialized as JSON; devices must send it only as the user message.
+message FamilyAiPrompt {
+  string system = 1;
+  string user = 2;
+  string schema_name = 3;
+  string schema_json = 4;
+  uint32 max_output_tokens = 5;
+}
+
+message FamilyAiJob {
+  string id = 1;
+  FamilyAiJobKind kind = 2;
+  FamilyAiJobStatus status = 3;
+  string profile_id = 4;
+  string created_at = 5;
+  string expires_at = 6;
+  // Present only when the caller may run the job now.
+  FamilyAiPrompt prompt = 7;
+  // Short parent-facing description for approval, e.g. "Practice · Math · 5 questions".
+  string summary = 8;
+  // The child's exact message for homework help, shown to parents before approval.
+  string request_text = 9;
+}
+
+message PrepareFamilyAiJobRequest {
+  oneof task {
+    GeneratePracticeRequest practice = 1;
+    GenerateHomeworkDraftRequest homework_draft = 2;
+    SuggestWorksheetParserRequest worksheet_parser = 3;
+  }
+}
+
+message GetFamilyAiJobRequest {
+  string id = 1;
+}
+
+message ListFamilyAiJobsRequest {}
+
+message ListFamilyAiJobsResponse {
+  repeated FamilyAiJob jobs = 1;
+}
+
+message CompleteFamilyAiJobRequest {
+  string id = 1;
+  // Raw structured-output text returned by the provider.
+  string output = 2;
+}
+
+message CompleteFamilyAiJobResponse {
+  FamilyAiJob job = 1;
+  oneof result {
+    GeneratePracticeResponse practice = 2;
+    GenerateHomeworkDraftResponse homework_draft = 3;
+    SuggestWorksheetParserResponse worksheet_parser = 4;
+    FamilyAiHelpReply homework_help = 5;
+  }
+}
+
+// Validated tutor reply: hints and steps, never the question's answer.
+message FamilyAiHelpReply {
+  string reply = 1;
+}
+
+// Child-session request for help with one question of practice delivered to them.
+message RequestFamilyAiHelpRequest {
+  string practice_id = 1;
+  int32 version = 2;
+  int32 position = 3;
+  string question = 4;
+}
+
+message GetFamilyAiHelpResponse {
+  FamilyAiJob job = 1;
+  // Present once the help request is completed.
+  string reply = 2;
+}
+
+message ApproveFamilyAiJobRequest {
+  string id = 1;
+}
+
+enum FamilyAiChildMode {
+  FAMILY_AI_CHILD_MODE_UNSPECIFIED = 0;
+  // Default: a parent approves each request and a parent device runs it.
+  FAMILY_AI_CHILD_MODE_PARENT_DEVICES = 1;
+  // The child's own device holds the family key and runs its requests.
+  FAMILY_AI_CHILD_MODE_CHILD_DEVICE = 2;
+}
+
+message FamilyAiChildSetting {
+  string profile_id = 1;
+  FamilyAiChildMode mode = 2;
+}
+
+message ListFamilyAiChildSettingsRequest {}
+
+message ListFamilyAiChildSettingsResponse {
+  repeated FamilyAiChildSetting settings = 1;
+}
+
+message SetFamilyAiChildSettingRequest {
+  string profile_id = 1;
+  FamilyAiChildMode mode = 2;
+}
+
+// Key transfer to a child's device. The server relays only one-time public keys
+// and one ciphertext; both devices show a code derived from both public keys and
+// the parent confirms they match before sending, so the server cannot intercept.
+message OfferFamilyAiKeyRequest {
+  // Child device's one-time X25519 public key (32 bytes).
+  bytes child_public_key = 1;
+}
+
+message FamilyAiKeyTransfer {
+  string id = 1;
+  string profile_id = 2;
+  string child_name = 3;
+  bytes child_public_key = 4;
+  // Set once a parent device responds.
+  bytes parent_public_key = 5;
+  // Set once the parent confirmed the code and sent the encrypted settings.
+  bytes nonce = 6;
+  bytes ciphertext = 7;
+  string expires_at = 8;
+}
+
+message ListFamilyAiKeyTransfersRequest {}
+
+message ListFamilyAiKeyTransfersResponse {
+  repeated FamilyAiKeyTransfer transfers = 1;
+}
+
+message RespondFamilyAiKeyTransferRequest {
+  string id = 1;
+  bytes parent_public_key = 2;
+}
+
+message SendFamilyAiKeyRequest {
+  string id = 1;
+  bytes nonce = 2;
+  bytes ciphertext = 3;
+}
+
+message GetFamilyAiKeyTransferRequest {
+  string id = 1;
+}
+
+message GetFamilyAiChildStatusRequest {}
+
+message CancelFamilyAiJobRequest {
+  string id = 1;
+}

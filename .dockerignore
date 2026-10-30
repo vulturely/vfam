@@ -1,0 +1,15 @@
+.git
+.github
+.husky
+.svelte-kit
+build
+coverage
+node_modules
+playwright-report
+test-results
+src-tauri/target
+src-tauri/gen
+target
+.integration-coverage
+Dockerfile.test
+.dockerignore

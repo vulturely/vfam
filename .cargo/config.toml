@@ -1,0 +1,7 @@
+# macOS dev builds are signed with one stable local identity so a Keychain
+# "Always Allow" keeps working after each rebuild. See README "macOS keychain prompts".
+[target.aarch64-apple-darwin]
+runner = "scripts/dev/macos-sign-run.sh"
+
+[target.x86_64-apple-darwin]
+runner = "scripts/dev/macos-sign-run.sh"

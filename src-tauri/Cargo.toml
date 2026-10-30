@@ -1,0 +1,86 @@
+[package]
+name = "vfam"
+version = "0.1.0"
+description = "Desktop and mobile client for Vulture"
+authors = ["biplabpokhrel@swavan.io"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "vfam_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+tauri-plugin-notification = "=2.3.3"
+vulture-chat-crypto = { path = "../crates/vulture-chat-crypto" }
+vulture-device-vault = { path = "../crates/vulture-device-vault" }
+aes-gcm = "0.10"
+base64 = "0.22"
+keyring-core = "=1.0.1"
+rusqlite = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"] }
+uuid = { version = "1", features = ["v4"] }
+zeroize = "1"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+hkdf = "0.12"
+sha2 = "0.10"
+vulture-protocol = { path = "../crates/vulture-protocol" }
+tonic = { version = "0.12", features = ["tls", "tls-native-roots"] }
+tokio = { version = "1", features = ["io-util", "process", "sync", "time"] }
+tokio-stream = "0.1"
+rust_socketio = { version = "0.6", features = ["async"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+futures-util = "0.3"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tower = { version = "0.4", features = ["util"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "=1.0.2", features = ["keychain"] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+apple-native-keyring-store = { version = "=1.0.2", features = ["protected"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = "=1.1.0"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus-secret-service-keyring-store = { version = "=1.0.1", features = ["crypto-rust", "vendored"] }
+
+[dev-dependencies]
+rcgen = "0.13"
+tempfile = "3"
+tauri = { version = "2", features = ["test"] }
+vulture-protocol = { path = "../crates/vulture-protocol", features = ["transport-tests"] }
+tokio = { version = "1", features = ["io-util", "macros", "rt-multi-thread"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+tokio-tungstenite = "0.21"
+
+[target.'cfg(target_os = "android")'.dependencies]
+android-native-keyring-store = "=1.0.0"
+jni = "0.21"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-autostart = "2"
+
+[lints.rust]
+dead_code = "deny"
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+too_many_arguments = "deny"

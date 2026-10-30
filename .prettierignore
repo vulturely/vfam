@@ -1,0 +1,15 @@
+.svelte-kit
+build
+dist
+node_modules
+package-lock.json
+src-tauri/gen
+src-tauri/target
+test-results
+playwright-report
+blob-report
+coverage
+target
+artifacts
+crates/*/target
+packages/core/src/chat/wasm

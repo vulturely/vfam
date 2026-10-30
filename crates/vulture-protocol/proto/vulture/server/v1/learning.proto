@@ -1,0 +1,543 @@
+syntax = "proto3";
+package vulture.server.v1;
+
+// Issue-22 v1 DTO contracts. Feature issues bind these to RPCs only when their
+// authorization, validation and provider implementations are ready. IDs are
+// references, never authority. Times are RFC3339 UTC; weekdays use Monday=0.
+message SourceVersion {
+  string id = 1;
+  int32 version = 2;
+}
+message PracticeVersion {
+  string id = 1;
+  int32 version = 2;
+}
+enum HomeworkMediaType {
+  HOMEWORK_MEDIA_TYPE_UNSPECIFIED = 0;
+  HOMEWORK_MEDIA_TYPE_JPEG = 1;
+  HOMEWORK_MEDIA_TYPE_PNG = 2;
+  HOMEWORK_MEDIA_TYPE_PDF = 3;
+  HOMEWORK_MEDIA_TYPE_TEXT = 4;
+}
+message HomeworkItem {
+  string id = 1;
+  string family_id = 2;
+  string profile_id = 3;
+  string title = 4;
+  string subject = 5;
+  string uploaded_by = 6;
+  string created_at = 7;
+}
+
+// Storage keys and permanent URLs are deliberately absent.
+message HomeworkSource {
+  SourceVersion source = 1;
+  string homework_id = 2;
+  HomeworkMediaType media_type = 3;
+  int64 byte_size = 4;
+  int32 page_count = 5;
+  EmailProvenance email_provenance = 6;
+}
+message WorksheetWord {
+  string text = 1;
+  repeated int32 region = 2;
+}
+message SourceSegment {
+  string id = 1;
+  SourceVersion source = 2;
+  int32 page_number = 3;
+  int32 ordinal = 4;
+  string text = 5;
+  bool needs_review = 6;
+  optional string confirmed_at = 7;
+  float confidence = 8;
+  repeated int32 region = 9;
+  repeated WorksheetWord words = 10;
+}
+message CreateHomeworkRequest {
+  string profile_id = 1;
+  string title = 2;
+  string subject = 3;
+  string filename = 4;
+  HomeworkMediaType declared_media_type = 5;
+  bytes content = 6;
+  string idempotency_key = 7;
+  repeated HomeworkAnswer answer_key = 8;
+  string parser_yaml = 9;
+}
+message CreateHomeworkResponse {
+  HomeworkItem homework = 1;
+  HomeworkSource source = 2;
+  string extraction_job_id = 3;
+}
+message GetHomeworkRequest {
+  string homework_id = 1;
+}
+message GetHomeworkResponse {
+  HomeworkItem homework = 1;
+  repeated HomeworkSource sources = 2;
+  repeated HomeworkAnswer answer_key = 3;
+  string parser_yaml = 4;
+  // Typed homework without instructions: its text is the numbered questions,
+  // so clients show no instructions.
+  bool text_from_questions = 5;
+}
+message GetSourceSegmentsRequest {
+  SourceVersion source = 1;
+}
+message GetSourceSegmentsResponse {
+  repeated SourceSegment segments = 1;
+  string state = 2;
+  SourceVersion source = 3;
+}
+message ExtractHomeworkRequest {
+  SourceVersion source = 1;
+}
+
+// Corrections create a new source revision rather than mutating an approved version.
+message ConfirmSourceRequest {
+  SourceVersion expected_source = 1;
+  repeated SourceSegment corrections = 2;
+  string idempotency_key = 3;
+}
+message ConfirmSourceResponse {
+  SourceVersion source = 1;
+  repeated SourceSegment segments = 2;
+}
+enum PracticeQuestionKind {
+  PRACTICE_QUESTION_KIND_UNSPECIFIED = 0;
+  PRACTICE_QUESTION_KIND_SPELLING = 1;
+  PRACTICE_QUESTION_KIND_SHORT_ANSWER = 2;
+  // One correct option.
+  PRACTICE_QUESTION_KIND_MULTIPLE_CHOICE = 3;
+  // Select every correct option.
+  PRACTICE_QUESTION_KIND_CHOOSE_MANY = 4;
+  PRACTICE_QUESTION_KIND_TRUE_FALSE = 5;
+  PRACTICE_QUESTION_KIND_MATCHING = 6;
+}
+message PracticeQuestion {
+  int32 position = 1;
+  PracticeQuestionKind kind = 2;
+  string prompt = 3;
+  string hint = 4;
+  // Options to pick from; for matching, the right-hand answers in shuffled order.
+  repeated string choices = 5;
+  // Matching: the left-hand items to pair with `choices`.
+  repeated string items = 6;
+  // Spelling: the word or sentence to read aloud.
+  string say = 7;
+  // How many hints can be requested (0 for assigned homework questions).
+  int32 hint_count = 8;
+}
+
+// This message belongs only to parent review responses; never embed it in child responses.
+message ParentPracticeQuestion {
+  PracticeQuestion question = 1;
+  string expected_answer = 2;
+  string source_segment_id = 3;
+  string source_quote = 4;
+  repeated string hints = 5;
+  int64 a = 6;
+  int64 b = 7;
+  string operation = 8;
+  // Answer key: correct options, other accepted answers or matching answers
+  // aligned with question.items.
+  repeated string answers = 9;
+  string explanation = 10;
+}
+message PracticeSet {
+  PracticeVersion practice = 1;
+  SourceVersion source = 2;
+  string profile_id = 3;
+  string family_id = 4;
+  string title = 5;
+  bool approved = 6;
+  optional string approved_by = 7;
+  optional string approved_at = 8;
+  string review_state = 9;
+  string subject = 10;
+  string difficulty = 11;
+  // "generated" (AI from an approved worksheet) or "assigned" (homework questions).
+  string origin = 12;
+}
+message GeneratePracticeRequest {
+  SourceVersion source = 1;
+  string idempotency_key = 2;
+  string subject = 3;
+  string difficulty = 4;
+  int32 max_questions = 5;
+  // Explicit consent for this request only; never inferred from prior requests.
+  bool ai_opt_in = 6;
+}
+message GeneratePracticeResponse {
+  PracticeSet practice = 1;
+  repeated ParentPracticeQuestion questions = 2;
+}
+message ApprovePracticeRequest {
+  PracticeVersion expected_practice = 1;
+}
+message ApprovePracticeResponse {
+  PracticeSet practice = 1;
+}
+enum LearningSessionState {
+  LEARNING_SESSION_STATE_UNSPECIFIED = 0;
+  LEARNING_SESSION_STATE_ACTIVE = 1;
+  LEARNING_SESSION_STATE_COMPLETED = 2;
+  LEARNING_SESSION_STATE_CANCELLED = 3;
+}
+message LearningSession {
+  string id = 1;
+  string profile_id = 2;
+  PracticeVersion practice = 3;
+  LearningSessionState state = 4;
+  string created_at = 5;
+  string updated_at = 6;
+}
+message StartLearningSessionRequest {
+  PracticeVersion practice = 1;
+  string idempotency_key = 2;
+}
+message StartLearningSessionResponse {
+  LearningSession session = 1;
+}
+message GetLearningSessionRequest {
+  string session_id = 1;
+}
+
+// Child receives one question at a time with no key, private source text or other child's data.
+message GetLearningSessionResponse {
+  LearningSession session = 1;
+  optional PracticeQuestion question = 2;
+  int32 answered = 3;
+  int32 total = 4;
+  string hint = 5;
+  optional string revealed_answer = 6;
+  bool help_requested = 7;
+  optional LearningAnswerResult last_result = 8;
+}
+enum LearningAnswerResult {
+  LEARNING_ANSWER_RESULT_UNSPECIFIED = 0;
+  LEARNING_ANSWER_RESULT_CORRECT = 1;
+  LEARNING_ANSWER_RESULT_INCORRECT = 2;
+  LEARNING_ANSWER_RESULT_NEEDS_REVIEW = 3;
+}
+message SubmitLearningAnswerRequest {
+  string session_id = 1;
+  int32 position = 2;
+  string answer = 3;
+  string request_id = 4;
+}
+message SubmitLearningAnswerResponse {
+  string answer_id = 1;
+  LearningAnswerResult result = 2;
+}
+enum ScheduledActivity {
+  SCHEDULED_ACTIVITY_UNSPECIFIED = 0;
+  SCHEDULED_ACTIVITY_LEARNING = 1;
+  SCHEDULED_ACTIVITY_BREAK = 2;
+}
+message ScheduleWindow {
+  int32 weekday = 1;
+  int32 start_minute = 2;
+  int32 end_minute = 3;
+  ScheduledActivity activity = 4;
+}
+message SchedulePolicy {
+  string id = 1;
+  int32 version = 2;
+  string profile_id = 3;
+  string family_id = 4;
+  string timezone = 5;
+  string effective_from = 6;
+  optional string effective_until = 7;
+  repeated ScheduleWindow windows = 8;
+}
+message SetSchedulePolicyRequest {
+  SchedulePolicy policy = 1;
+  int32 expected_version = 2;
+}
+message SetSchedulePolicyResponse {
+  SchedulePolicy policy = 1;
+}
+enum RobotCapability {
+  ROBOT_CAPABILITY_UNSPECIFIED = 0;
+  ROBOT_CAPABILITY_SPEAK_PROMPT = 1;
+  ROBOT_CAPABILITY_START_QUIZ = 2;
+  ROBOT_CAPABILITY_STOP_QUIZ = 3;
+}
+message RobotDevice {
+  string id = 1;
+  string family_id = 2;
+  string display_name = 3;
+  repeated RobotCapability capabilities = 4;
+  optional string revoked_at = 5;
+  optional string last_seen_at = 6;
+}
+enum RobotCommandState {
+  ROBOT_COMMAND_STATE_UNSPECIFIED = 0;
+  ROBOT_COMMAND_STATE_QUEUED = 1;
+  ROBOT_COMMAND_STATE_ACCEPTED = 2;
+  ROBOT_COMMAND_STATE_RUNNING = 3;
+  ROBOT_COMMAND_STATE_SUCCEEDED = 4;
+  ROBOT_COMMAND_STATE_FAILED = 5;
+  ROBOT_COMMAND_STATE_CANCELLED = 6;
+  ROBOT_COMMAND_STATE_EXPIRED = 7;
+}
+
+// Approved learning session only; no arbitrary text, shell, camera or motor payload.
+message RobotCommand {
+  string id = 1;
+  string device_id = 2;
+  string family_id = 3;
+  int32 protocol_version = 4;
+  RobotCapability capability = 5;
+  optional string session_id = 6;
+  string nonce = 7;
+  RobotCommandState state = 8;
+  string issued_at = 9;
+  string expires_at = 10;
+}
+message QueueRobotCommandRequest {
+  string device_id = 1;
+  RobotCapability capability = 2;
+  optional string session_id = 3;
+  string nonce = 4;
+  string expires_at = 5;
+}
+message QueueRobotCommandResponse {
+  RobotCommand command = 1;
+}
+message GetRobotDeviceRequest {
+  string device_id = 1;
+}
+message GetRobotDeviceResponse {
+  RobotDevice device = 1;
+}
+
+message ListHomeworkRequest {
+  string profile_id = 1;
+}
+message ListHomeworkResponse {
+  repeated GetHomeworkResponse items = 1;
+}
+message DownloadHomeworkRequest {
+  string homework_id = 1;
+}
+message DownloadHomeworkResponse {
+  bytes content = 1;
+  string content_type = 2;
+}
+message DeleteHomeworkRequest {
+  string homework_id = 1;
+}
+message DeleteHomeworkResponse {}
+
+message ListPracticeRequest {
+  SourceVersion source = 1;
+}
+message ListPracticeResponse {
+  repeated GeneratePracticeResponse sets = 1;
+}
+message RevisePracticeRequest {
+  PracticeVersion expected_practice = 1;
+  string title = 2;
+  repeated ParentPracticeQuestion questions = 3;
+  bool reject = 4;
+}
+
+// Guardian-only tutor preview; child/device workflows use the shared approved delivery gate.
+message TutorPracticeRequest {
+  PracticeVersion practice = 1;
+  optional string session_id = 2;
+  int32 position = 3;
+  optional string answer = 4;
+  bool request_hint = 5;
+}
+message TutorPracticeResponse {
+  string session_id = 1;
+  PracticeQuestion question = 2;
+  string hint = 3;
+  optional string revealed_answer = 4;
+  string result = 5;
+}
+message GetUncertainAnswersRequest {
+  PracticeVersion practice = 1;
+}
+message UncertainPracticeAnswer {
+  string session_id = 1;
+  int32 position = 2;
+  string answer = 3;
+  string prompt = 4;
+}
+message GetUncertainAnswersResponse {
+  repeated UncertainPracticeAnswer answers = 1;
+}
+
+// Child-safe catalog: no source, guardian metadata, hints or keys.
+message ListChildPracticeRequest {}
+message ChildPractice {
+  PracticeVersion practice = 1;
+  string title = 2;
+  string subject = 3;
+  optional string session_id = 4;
+  LearningSessionState state = 5;
+}
+message ListChildPracticeResponse {
+  repeated ChildPractice activities = 1;
+}
+enum LearningSessionAction {
+  LEARNING_SESSION_ACTION_UNSPECIFIED = 0;
+  LEARNING_SESSION_ACTION_HINT = 1;
+  LEARNING_SESSION_ACTION_HELP = 2;
+  LEARNING_SESSION_ACTION_STOP = 3;
+}
+message ControlLearningSessionRequest {
+  string session_id = 1;
+  int32 position = 2;
+  LearningSessionAction action = 3;
+  string request_id = 4;
+}
+message ReviewLearningSessionsRequest {
+  string profile_id = 1;
+}
+message LearningAttempt {
+  LearningSession session = 1;
+  bool help_requested = 2;
+  repeated LearningAttemptAnswer answers = 3;
+  string homework_title = 4;
+  string subject = 5;
+  int32 total_questions = 6;
+}
+message LearningAttemptAnswer {
+  string id = 1;
+  int32 position = 2;
+  string prompt = 3;
+  string answer = 4;
+  LearningAnswerResult result = 5;
+  string created_at = 6;
+  // Grading detail for guardians, e.g. "3 of 4 pairs".
+  string detail = 7;
+}
+message ReviewLearningSessionsResponse {
+  repeated LearningAttempt attempts = 1;
+}
+
+// Unverified original message headers, retained only for the selected source.
+message EmailProvenance {
+  string sender = 1;
+  string sent_at = 2;
+  string subject = 3;
+  string part_name = 4;
+}
+message PreviewHomeworkEmailRequest {
+  string profile_id = 1;
+  bytes content = 2;
+  bool pasted = 3;
+}
+message EmailPreviewPart {
+  int32 index = 1;
+  string name = 2;
+  string content_type = 3;
+  bytes content = 4;
+  string text = 5;
+  string unavailable_reason = 6;
+}
+message PreviewHomeworkEmailResponse {
+  EmailProvenance provenance = 1;
+  repeated EmailPreviewPart parts = 2;
+}
+message ImportHomeworkEmailRequest {
+  string profile_id = 1;
+  bytes content = 2;
+  bool pasted = 3;
+  int32 part_index = 4;
+  string title = 5;
+  string subject = 6;
+}
+message ImportHomeworkEmailResponse {
+  GetHomeworkResponse item = 1;
+}
+
+// Guardian-only generation and answer keys. These are never child delivery DTOs.
+// One answer-key question. An empty kind is a typed answer (keys saved before
+// question types). Kinds: short_answer, spelling, multiple_choice (one correct
+// option), choose_many, true_false, matching.
+message HomeworkAnswer {
+  string question = 1;
+  // The correct answer; for choose_many and matching a readable summary.
+  string answer = 2;
+  string explanation = 3;
+  string kind = 4;
+  // Options for multiple_choice and choose_many (True/False for true_false).
+  repeated string choices = 5;
+  // choose_many: correct options. short_answer: other accepted answers.
+  // matching: right-hand answers aligned with items.
+  repeated string answers = 6;
+  // matching: left-hand items.
+  repeated string items = 7;
+  // spelling: the word or sentence the child's device reads aloud.
+  string say = 8;
+}
+message GenerateHomeworkDraftRequest {
+  string profile_id = 1;
+  string topic = 2;
+  string context = 3;
+  string subject = 4;
+  int32 question_count = 5;
+  bool ai_opt_in = 6;
+  bytes reference_content = 7;
+  HomeworkMediaType reference_media_type = 8;
+}
+message GenerateHomeworkDraftResponse {
+  string title = 1;
+  repeated HomeworkAnswer questions = 2;
+}
+
+message UpdateHomeworkRequest {
+  string homework_id = 1;
+  SourceVersion expected_source = 2;
+  string title = 3;
+  string subject = 4;
+  optional bytes content = 5;
+  HomeworkMediaType declared_media_type = 6;
+  HomeworkQuestions answer_key = 7;
+  optional string parser_yaml = 8;
+}
+
+// A deterministic YAML recipe is validated by the client, then supplied as JSON.
+// Cached local OCR lines may be reused to apply a changed recipe without re-OCR.
+message ParseWorksheetDraftRequest {
+  string profile_id = 1;
+  bytes content = 2;
+  HomeworkMediaType declared_media_type = 3;
+  string parser_json = 4;
+  repeated SourceSegment segments = 5;
+}
+message ParseWorksheetDraftResponse {
+  // Region bounds are [x,y,width,height], normalized to a 0–1000 page grid.
+  repeated SourceSegment segments = 1;
+  repeated HomeworkAnswer questions = 2;
+  repeated string warnings = 3;
+}
+message HomeworkQuestions {
+  repeated HomeworkAnswer questions = 1;
+}
+
+// Optional AI assistance produces a recipe, never generated worksheet answers.
+message SuggestWorksheetParserRequest {
+  string profile_id = 1;
+  repeated SourceSegment segments = 2;
+  string layout = 3;
+  bool ai_opt_in = 4;
+}
+message SuggestWorksheetParserResponse {
+  string parser_json = 1;
+}
+
+// Turns a homework's reviewed questions into practice the child can answer now.
+message AssignHomeworkRequest {
+  string homework_id = 1;
+}
+message AssignHomeworkResponse {
+  PracticeSet practice = 1;
+}

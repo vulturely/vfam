@@ -1,0 +1,125 @@
+syntax = "proto3";
+package vulture.server.v1;
+
+// Device credentials are separate from parent and child sessions. All RPCs except
+// PairRobot require a bearer credential. Parent RPCs require a guardian session.
+service RobotGatewayService {
+  rpc CreateRobotPairing(CreateRobotPairingRequest) returns (CreateRobotPairingResponse);
+  rpc PairRobot(PairRobotRequest) returns (PairRobotResponse);
+  rpc ListRobots(ListRobotsRequest) returns (ListRobotsResponse);
+  rpc RevokeRobot(RevokeRobotRequest) returns (RevokeRobotResponse);
+  rpc IssueRobotCommand(IssueRobotCommandRequest) returns (IssueRobotCommandResponse);
+  rpc CancelRobotCommand(CancelRobotCommandRequest) returns (CancelRobotCommandResponse);
+  rpc RobotHeartbeat(RobotHeartbeatRequest) returns (RobotHeartbeatResponse);
+  rpc PollRobot(PollRobotRequest) returns (PollRobotResponse);
+  rpc AcknowledgeRobot(AcknowledgeRobotRequest) returns (AcknowledgeRobotResponse);
+  rpc AnswerRobot(AnswerRobotRequest) returns (AnswerRobotResponse);
+}
+message RevokeRobotResponse {}
+message CancelRobotCommandResponse {}
+message AcknowledgeRobotResponse {}
+message IssueRobotCommandResponse {
+  FamBudCommand command = 1;
+}
+message RobotHeartbeatResponse {
+  FamBudDevice device = 1;
+}
+enum RobotCapabilityValue {
+  ROBOT_CAPABILITY_VALUE_UNSPECIFIED = 0;
+  ROBOT_CAPABILITY_VALUE_START_QUIZ = 1;
+  ROBOT_CAPABILITY_VALUE_STOP_QUIZ = 2;
+  ROBOT_CAPABILITY_VALUE_SPEAK_PROMPT = 3;
+  ROBOT_CAPABILITY_VALUE_CAMERA = 4;
+  ROBOT_CAPABILITY_VALUE_SENSORS = 5;
+  ROBOT_CAPABILITY_VALUE_MOBILITY = 6;
+  ROBOT_CAPABILITY_VALUE_FLIGHT = 7;
+}
+message FamBudDevice {
+  string id = 1;
+  string profile_id = 2;
+  string display_name = 3;
+  repeated RobotCapabilityValue capabilities = 4;
+  optional string last_seen_at = 5;
+  optional uint32 battery_percent = 6;
+  string firmware = 7;
+  bool revoked = 8;
+  bool connected = 9; // Last heartbeat within 30 seconds, not revoked.
+}
+message CreateRobotPairingRequest {
+  string profile_id = 1;
+}
+message CreateRobotPairingResponse {
+  string token = 1; // Secret, one use, expires in two minutes.
+  string expires_at = 2;
+}
+message PairRobotRequest {
+  string token = 1;
+  string display_name = 2;
+  repeated RobotCapabilityValue capabilities = 3;
+  string firmware = 4;
+}
+message PairRobotResponse {
+  FamBudDevice device = 1;
+  string credential = 2; // Returned once; store privately on the device.
+}
+message ListRobotsRequest {
+  string profile_id = 1;
+}
+message ListRobotsResponse {
+  repeated FamBudDevice devices = 1;
+  repeated FamBudCommand commands = 2; // All live commands and latest 100 commands, including terminal states.
+}
+message RevokeRobotRequest {
+  string device_id = 1;
+}
+
+// Only a pinned approved spelling practice can create a quiz. No text/tool action
+// field exists. Command IDs and nonces are caller-generated UUIDs, never reused.
+message IssueRobotCommandRequest {
+  string command_id = 1;
+  string target = 2;
+  string nonce = 3;
+  string expires_at = 4; // RFC3339, at most five minutes in the future.
+  string practice_id = 5;
+  int32 practice_version = 6;
+}
+message FamBudCommand {
+  string command_id = 1;
+  string target = 2;
+  string nonce = 3;
+  string expires_at = 4;
+  string state = 5;
+  string session_id = 6;
+  int32 position = 7;
+  string prompt = 8; // Approved data, never parsed as instructions.
+  uint32 protocol_version = 9;
+}
+message CancelRobotCommandRequest {
+  string command_id = 1;
+}
+message RobotHeartbeatRequest {
+  uint32 battery_percent = 1;
+  string firmware = 2;
+  repeated RobotCapabilityValue capabilities = 3;
+}
+message PollRobotRequest {}
+message PollRobotResponse {
+  optional FamBudCommand command = 1;
+}
+message AcknowledgeRobotRequest {
+  string command_id = 1;
+  string nonce = 2;
+  string state = 3; // accepted -> running -> failed; success follows final answer.
+}
+message AnswerRobotRequest {
+  string command_id = 1;
+  string nonce = 2;
+  int32 position = 3;
+  string answer = 4;
+  string event_id = 5; // One use UUID; replays fail, never add learning events.
+}
+message AnswerRobotResponse {
+  string event_id = 1;
+  string result = 2;
+  optional FamBudCommand command = 3; // Next approved prompt, or succeeded.
+}

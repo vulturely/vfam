@@ -1,0 +1,194 @@
+syntax = "proto3";
+package vulture.server.v1;
+
+// Registry metadata is public to its family; enrollment bodies are endpoint-encrypted.
+service FamBuddyRegistryService {
+  rpc RegisterFamBuddy(RegisterFamBuddyRequest) returns (RegisterFamBuddyResponse);
+  rpc ListFamBuddies(ListFamBuddiesRequest) returns (ListFamBuddiesResponse);
+  rpc RevokeFamBuddy(RevokeFamBuddyRequest) returns (RevokeFamBuddyResponse);
+  rpc BeginEnrollment(BeginEnrollmentRequest) returns (BeginEnrollmentResponse);
+  rpc WatchEnrollment(WatchEnrollmentRequest) returns (stream WatchEnrollmentResponse);
+  rpc RespondEnrollment(RespondEnrollmentRequest) returns (RespondEnrollmentResponse);
+  rpc ConfirmEnrollment(ConfirmEnrollmentRequest) returns (ConfirmEnrollmentResponse);
+  rpc GetChannelStatus(GetChannelStatusRequest) returns (GetChannelStatusResponse);
+  rpc GetMediaRelay(GetMediaRelayRequest) returns (GetMediaRelayResponse);
+  // The family server's voice for a confirmed FamBuddy channel. Text is never stored.
+  rpc SynthesizeSpeech(SynthesizeSpeechRequest) returns (stream SynthesizeSpeechResponse);
+  // The FamBuddy hub says a question or answer is waiting for a guardian's approval.
+  // Ids only: the server never receives what was asked or answered.
+  rpc NotifyApproval(NotifyApprovalRequest) returns (NotifyApprovalResponse);
+  // A guardian saw the approval alert (the app showed or opened it); stops the email reminder.
+  rpc AcknowledgeApproval(AcknowledgeApprovalRequest) returns (AcknowledgeApprovalResponse);
+  // A signed-in parent's device that may receive approval alerts by push.
+  rpc RegisterPushDevice(RegisterPushDeviceRequest) returns (RegisterPushDeviceResponse);
+  rpc UnregisterPushDevice(UnregisterPushDeviceRequest) returns (UnregisterPushDeviceResponse);
+  // A family guardian installs the family's FamBuddy license from the Swavan App
+  // Platform, or removes it with an empty token. The token is never returned.
+  rpc SetFamilyLicense(SetFamilyLicenseRequest) returns (SetFamilyLicenseResponse);
+  // The family's FamBuddy license as of now, for a family guardian.
+  rpc GetFamilyLicense(GetFamilyLicenseRequest) returns (GetFamilyLicenseResponse);
+}
+message RegisteredFamBuddy {
+  string id = 1;
+  string name = 2;
+  string created_at = 3;
+}
+message RegisterFamBuddyRequest {
+  string name = 1;
+}
+message RegisterFamBuddyResponse {
+  RegisteredFamBuddy device = 1;
+}
+message ListFamBuddiesRequest {}
+message ListFamBuddiesResponse {
+  repeated RegisteredFamBuddy devices = 1;
+}
+message RevokeFamBuddyRequest {
+  string registration = 1;
+}
+message RevokeFamBuddyResponse {}
+message BeginEnrollmentRequest {
+  string registration = 1;
+  string invite = 2;
+  string device = 3;
+  string endpoint = 4;
+  string bootstrap_hash = 5;
+  string channel = 6;
+  string device_hash = 7;
+  bytes request = 8;
+}
+message BeginEnrollmentResponse {}
+message WatchEnrollmentRequest {
+  string invite = 1;
+}
+message WatchEnrollmentResponse {
+  bytes request = 1;
+  bytes response = 2;
+  string expires_at = 3;
+  bool confirmed = 4;
+}
+message RespondEnrollmentRequest {
+  string invite = 1;
+  bytes response = 2;
+}
+message RespondEnrollmentResponse {}
+message ConfirmEnrollmentRequest {
+  string invite = 1;
+}
+message ConfirmEnrollmentResponse {}
+message GetMediaRelayRequest {
+  string registration = 1;
+}
+message GetMediaRelayResponse {
+  repeated string urls = 1;
+  string username = 2;
+  string credential = 3;
+  string expires_at = 4;
+}
+
+// Device capability authenticates durable reconciliation after bootstrap expiry.
+message GetChannelStatusRequest {
+  string channel = 1;
+}
+message GetChannelStatusResponse {
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_PENDING = 1;
+    STATE_CONFIRMED = 2;
+    STATE_REVOKED = 3;
+  }
+  State state = 1;
+}
+
+// Authenticated with the channel's device capability (Bearer vfr_...).
+message SynthesizeSpeechRequest {
+  string channel = 1;
+  // Up to 8,000 UTF-8 bytes; spoken a sentence at a time.
+  string text = 2;
+}
+
+// One sentence of speech as signed 16-bit little-endian mono PCM.
+message SynthesizeSpeechResponse {
+  bytes pcm = 1;
+  uint32 sample_rate = 2;
+}
+
+// What is waiting for a guardian's approval.
+enum ApprovalKind {
+  APPROVAL_KIND_UNSPECIFIED = 0;
+  // A child's question before FamBuddy answers it.
+  APPROVAL_KIND_QUESTION = 1;
+  // An answer before FamBuddy speaks it.
+  APPROVAL_KIND_ANSWER = 2;
+}
+
+// Authenticated with the channel's device capability (Bearer vfr_...); the
+// channel must be confirmed. Repeating a turn is accepted and alerts nobody again.
+// At most 30 new turns per FamBuddy in 10 minutes (RESOURCE_EXHAUSTED beyond).
+message NotifyApprovalRequest {
+  string channel = 1;
+  ApprovalKind kind = 2;
+  // A random UUID the hub makes for this turn; it carries no content.
+  string turn = 3;
+}
+message NotifyApprovalResponse {}
+
+// Parent session; the caller must manage the family that owns the registration.
+message AcknowledgeApprovalRequest {
+  string registration = 1;
+  string turn = 2;
+}
+message AcknowledgeApprovalResponse {}
+
+enum PushPlatform {
+  PUSH_PLATFORM_UNSPECIFIED = 0;
+  PUSH_PLATFORM_APNS = 1;
+  PUSH_PLATFORM_FCM = 2;
+}
+
+// Parent session. A token registered again moves to the caller's account.
+message RegisterPushDeviceRequest {
+  PushPlatform platform = 1;
+  // The platform's device token, up to 4,096 bytes.
+  string token = 2;
+}
+message RegisterPushDeviceResponse {}
+message UnregisterPushDeviceRequest {
+  PushPlatform platform = 1;
+  string token = 2;
+}
+message UnregisterPushDeviceResponse {}
+
+// The family's FamBuddy license, evaluated when asked. Never carries the token.
+// Paid features: fambuddy.remote_access (enrollment, relay, media relay) and
+// fambuddy.server_alerts (approval alerts); nothing else needs a license.
+message FamilyLicense {
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    // No license, or one this server cannot verify.
+    STATE_NONE = 1;
+    STATE_VALID = 2;
+    // Installed but past its expiry: the paid features are off, nothing is deleted.
+    STATE_EXPIRED = 3;
+  }
+  State state = 1;
+  string edition = 2;
+  // SAP feature ids the license grants, e.g. "fambuddy.remote_access".
+  repeated string features = 3;
+  // RFC 3339; empty when there is no license or it never expires.
+  string expires_at = 4;
+}
+
+// Parent session; the caller must manage the family. A license must be valid now
+// and not already used by another family (ALREADY_EXISTS).
+message SetFamilyLicenseRequest {
+  // The compact SAP license token (up to 65,536 bytes); empty removes the license.
+  string token = 1;
+}
+message SetFamilyLicenseResponse {
+  FamilyLicense license = 1;
+}
+message GetFamilyLicenseRequest {}
+message GetFamilyLicenseResponse {
+  FamilyLicense license = 1;
+}

@@ -1,0 +1,27 @@
+[package]
+name = "vulture-chat-crypto"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+browser = ["dep:wasm-bindgen", "openmls/js", "uuid/js", "dep:getrandom_02"]
+
+[dependencies]
+aes-gcm = "0.10"
+openmls = "=0.9.1"
+openmls_rust_crypto = "=0.6.0"
+openmls_basic_credential = "=0.6.0"
+openmls_traits = "0.6"
+base64 = "0.22"
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4"] }
+tls_codec = "0.5"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wasm-bindgen = { version = "=0.2.127", optional = true }
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"], optional = true }

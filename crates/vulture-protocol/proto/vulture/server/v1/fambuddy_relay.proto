@@ -1,0 +1,32 @@
+syntax = "proto3";
+package vulture.server.v1;
+
+// The relay never has MLS private keys or local FamBuddy credentials.
+service FamBuddyRelayService {
+  rpc CreateChannel(CreateChannelRequest) returns (CreateChannelResponse);
+  rpc RevokeChannel(RevokeChannelRequest) returns (RevokeChannelResponse);
+  rpc PublishEnvelope(PublishEnvelopeRequest) returns (PublishEnvelopeResponse);
+  rpc WatchEnvelopes(WatchEnvelopesRequest) returns (stream WatchEnvelopesResponse);
+}
+message CreateChannelRequest {}
+message CreateChannelResponse {
+  string channel = 1;
+  string device_credential = 2;
+}
+message RevokeChannelRequest {
+  string channel = 1;
+}
+message RevokeChannelResponse {}
+message PublishEnvelopeRequest {
+  string channel = 1;
+  bytes ciphertext = 2;
+}
+message PublishEnvelopeResponse {}
+message WatchEnvelopesRequest {
+  string channel = 1;
+}
+message WatchEnvelopesResponse {
+  // A ready event announces the connected peer, including after a reconnect.
+  bool ready = 1;
+  bytes ciphertext = 2;
+}

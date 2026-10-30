@@ -1,0 +1,850 @@
+syntax = "proto3";
+
+package vulture.server.v1;
+
+import "vulture/server/v1/family_ai.proto";
+import "vulture/server/v1/learning.proto";
+import "vulture/server/v1/timetable.proto";
+
+service VultureControl {
+  // Parent-admin only; credentials are write-only.
+  rpc FamilyResources(FamilyResourcesRequest) returns (FamilyResourcesResponse);
+  rpc VoiceAssistant(VoiceAssistantRequest) returns (VoiceAssistantResponse);
+  rpc ParentMailbox(ParentMailboxRequest) returns (ParentMailboxResponse);
+  // Browser-compatible device-scoped call signaling; shares the native stream router.
+  rpc FamilyCall(FamilyCallRequest) returns (FamilyCallResponse);
+  rpc SaveCalendar(SaveCalendarRequest) returns (GetTimetableResponse);
+  rpc SetProfileTimezone(SetProfileTimezoneRequest) returns (GetTimetableResponse);
+  rpc GetTimetable(GetTimetableRequest) returns (GetTimetableResponse);
+  rpc SaveTimetable(SaveTimetableRequest) returns (SaveTimetableResponse);
+  rpc OverrideTimetable(OverrideTimetableRequest) returns (OverrideTimetableResponse);
+  rpc GetChildPolicy(GetChildPolicyRequest) returns (GetChildPolicyResponse);
+  rpc ListChildPractice(ListChildPracticeRequest) returns (ListChildPracticeResponse);
+  rpc StartLearningSession(StartLearningSessionRequest) returns (StartLearningSessionResponse);
+  rpc GetLearningSession(GetLearningSessionRequest) returns (GetLearningSessionResponse);
+  // Child session: the current question's word as speech made on this server (WAV).
+  // Only the session's current question can be heard; UNAVAILABLE means use the device voice.
+  rpc GetQuestionAudio(GetQuestionAudioRequest) returns (GetQuestionAudioResponse);
+  rpc SubmitLearningAnswer(SubmitLearningAnswerRequest) returns (SubmitLearningAnswerResponse);
+  rpc ControlLearningSession(ControlLearningSessionRequest) returns (GetLearningSessionResponse);
+  rpc ReviewLearningSessions(ReviewLearningSessionsRequest) returns (ReviewLearningSessionsResponse);
+  rpc GeneratePractice(GeneratePracticeRequest) returns (GeneratePracticeResponse);
+  rpc ListPractice(ListPracticeRequest) returns (ListPracticeResponse);
+  rpc RevisePractice(RevisePracticeRequest) returns (GeneratePracticeResponse);
+  rpc ApprovePractice(ApprovePracticeRequest) returns (ApprovePracticeResponse);
+  rpc TutorPractice(TutorPracticeRequest) returns (TutorPracticeResponse);
+  rpc GetUncertainAnswers(GetUncertainAnswersRequest) returns (GetUncertainAnswersResponse);
+  rpc ExtractHomework(ExtractHomeworkRequest) returns (GetSourceSegmentsResponse);
+  rpc GetSourceSegments(GetSourceSegmentsRequest) returns (GetSourceSegmentsResponse);
+  rpc ConfirmSource(ConfirmSourceRequest) returns (ConfirmSourceResponse);
+  rpc PreviewHomeworkEmail(PreviewHomeworkEmailRequest) returns (PreviewHomeworkEmailResponse);
+  rpc ImportHomeworkEmail(ImportHomeworkEmailRequest) returns (ImportHomeworkEmailResponse);
+  rpc SuggestWorksheetParser(SuggestWorksheetParserRequest) returns (SuggestWorksheetParserResponse);
+  rpc ParseWorksheetDraft(ParseWorksheetDraftRequest) returns (ParseWorksheetDraftResponse);
+  rpc GenerateHomeworkDraft(GenerateHomeworkDraftRequest) returns (GenerateHomeworkDraftResponse);
+  // Family-owned AI: prepare on the server, run on a family device, validate here.
+  rpc PrepareFamilyAiJob(PrepareFamilyAiJobRequest) returns (FamilyAiJob);
+  rpc GetFamilyAiJob(GetFamilyAiJobRequest) returns (FamilyAiJob);
+  rpc ListFamilyAiJobs(ListFamilyAiJobsRequest) returns (ListFamilyAiJobsResponse);
+  rpc CompleteFamilyAiJob(CompleteFamilyAiJobRequest) returns (CompleteFamilyAiJobResponse);
+  rpc CancelFamilyAiJob(CancelFamilyAiJobRequest) returns (FamilyAiJob);
+  rpc ApproveFamilyAiJob(ApproveFamilyAiJobRequest) returns (FamilyAiJob);
+  // Child session: ask for help with a delivered practice question.
+  rpc RequestFamilyAiHelp(RequestFamilyAiHelpRequest) returns (FamilyAiJob);
+  rpc GetFamilyAiHelp(GetFamilyAiJobRequest) returns (GetFamilyAiHelpResponse);
+  rpc ListFamilyAiChildSettings(ListFamilyAiChildSettingsRequest) returns (ListFamilyAiChildSettingsResponse);
+  rpc SetFamilyAiChildSetting(SetFamilyAiChildSettingRequest) returns (FamilyAiChildSetting);
+  // Child session: current mode, so a child device can drop a revoked key.
+  rpc GetFamilyAiChildStatus(GetFamilyAiChildStatusRequest) returns (FamilyAiChildSetting);
+  rpc OfferFamilyAiKey(OfferFamilyAiKeyRequest) returns (FamilyAiKeyTransfer);
+  rpc ListFamilyAiKeyTransfers(ListFamilyAiKeyTransfersRequest) returns (ListFamilyAiKeyTransfersResponse);
+  rpc RespondFamilyAiKeyTransfer(RespondFamilyAiKeyTransferRequest) returns (FamilyAiKeyTransfer);
+  rpc SendFamilyAiKey(SendFamilyAiKeyRequest) returns (FamilyAiKeyTransfer);
+  // Child session: one-time pickup; the ciphertext is deleted when returned.
+  rpc GetFamilyAiKeyTransfer(GetFamilyAiKeyTransferRequest) returns (FamilyAiKeyTransfer);
+  rpc CreateHomework(CreateHomeworkRequest) returns (CreateHomeworkResponse);
+  rpc ListHomework(ListHomeworkRequest) returns (ListHomeworkResponse);
+  rpc GetHomework(GetHomeworkRequest) returns (GetHomeworkResponse);
+  rpc DownloadHomework(DownloadHomeworkRequest) returns (DownloadHomeworkResponse);
+  rpc UpdateHomework(UpdateHomeworkRequest) returns (GetHomeworkResponse);
+  rpc DeleteHomework(DeleteHomeworkRequest) returns (DeleteHomeworkResponse);
+  rpc AssignHomework(AssignHomeworkRequest) returns (AssignHomeworkResponse);
+  // Child session: tasks assigned to the signed-in child's profile.
+  rpc ListChildTasks(ListChildTasksRequest) returns (ListTasksResponse);
+  // Child session: move an assigned task to in progress or in review.
+  rpc MarkChildTaskStatus(MarkChildTaskStatusRequest) returns (MarkTaskStatusResponse);
+  // A child (own profile) or a guardian sets or clears a learning profile's picture.
+  rpc SetProfileAvatar(SetProfileAvatarRequest) returns (SetAvatarResponse);
+  // Family members and the family's children may see a learning profile's picture.
+  rpc GetProfileAvatar(GetProfileAvatarRequest) returns (GetAvatarResponse);
+  // Child session: the family's members and child profiles, for chat and calls.
+  rpc ListChildFamily(ListChildFamilyRequest) returns (ListChildFamilyResponse);
+  // Guardian-only metadata and cancellation; workers have no public RPC.
+  rpc GetLearningJob(GetLearningJobRequest) returns (GetLearningJobResponse);
+  rpc CancelLearningJob(CancelLearningJobRequest) returns (CancelLearningJobResponse);
+  rpc BeginParentSignIn(BeginParentSignInRequest) returns (BeginParentSignInResponse);
+  rpc GetParentSession(GetParentSessionRequest) returns (GetParentSessionResponse);
+  rpc StartChildSession(StartChildSessionRequest) returns (StartChildSessionResponse);
+  rpc GetAccountSetup(GetAccountSetupRequest) returns (AccountSetupState);
+  rpc UpdateAccountSetup(UpdateAccountSetupRequest) returns (AccountSetupState);
+  rpc GetParentPinAccess(GetParentPinAccessRequest) returns (ParentPinAccess);
+  rpc SetParentPin(SetParentPinRequest) returns (ParentPinAccess);
+  rpc UnlockParent(UnlockParentRequest) returns (ExchangeAuthCodeResponse);
+  // Signed-in parent re-enters the PIN before a shared device opens the parent profile.
+  rpc VerifyParentPin(VerifyParentPinRequest) returns (VerifyParentPinResponse);
+  rpc GetChildPinAccess(GetChildPinAccessRequest) returns (ChildPinAccess);
+  rpc SetChildPin(SetChildPinRequest) returns (ChildPinAccess);
+  rpc SignInChild(SignInChildRequest) returns (StartChildSessionResponse);
+  rpc GetChildSession(GetChildSessionRequest) returns (GetChildSessionResponse);
+  rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
+
+  // Parent-only learning contexts; these never create a child login/session.
+  rpc CreateLearningProfile(CreateLearningProfileRequest) returns (CreateLearningProfileResponse);
+  rpc GetLearningSchool(GetLearningSchoolRequest) returns (LearningSchool);
+  rpc SaveLearningSchool(SaveLearningSchoolRequest) returns (LearningSchool);
+  rpc UpdateLearningProgression(UpdateLearningProgressionRequest) returns (GetLearningProfileResponse);
+  rpc ListLearningProfiles(ListLearningProfilesRequest) returns (ListLearningProfilesResponse);
+  rpc GetLearningProfile(GetLearningProfileRequest) returns (GetLearningProfileResponse);
+  rpc AddLearningGuardian(AddLearningGuardianRequest) returns (AddLearningGuardianResponse);
+  rpc RemoveLearningGuardian(RemoveLearningGuardianRequest) returns (RemoveLearningGuardianResponse);
+
+  // Lightweight control-plane probe for apps and future devices.
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  // Create an account for a family member before devices join the family.
+  rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
+
+  // Return the account with the given id, used to preview a member's name
+  // before a family admin adds them by their account id.
+  rpc GetAccount(GetAccountRequest) returns (GetAccountResponse);
+
+  // Create a family and make the authenticated caller its first admin member.
+  rpc CreateFamily(CreateFamilyRequest) returns (CreateFamilyResponse);
+
+  // Return the family the authenticated caller belongs to, if any.
+  rpc GetMyFamily(GetMyFamilyRequest) returns (GetMyFamilyResponse);
+
+  // Rename the caller's family.
+  rpc RenameFamily(RenameFamilyRequest) returns (RenameFamilyResponse);
+
+  // Update the caller's family's "Who we are" description.
+  rpc UpdateFamilyDescription(UpdateFamilyDescriptionRequest) returns (UpdateFamilyDescriptionResponse);
+
+  // Add an existing account to a family as a member.
+  rpc AddFamilyMember(AddFamilyMemberRequest) returns (AddFamilyMemberResponse);
+
+  // List the members of a family.
+  rpc ListFamilyMembers(ListFamilyMembersRequest) returns (ListFamilyMembersResponse);
+
+  // Set reciprocal relationship labels for the caller and an existing relative.
+  rpc SetFamilyRelationship(SetFamilyRelationshipRequest) returns (SetFamilyRelationshipResponse);
+
+  // List tasks for a family.
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+
+  // Create a family task with structured rich-text description content.
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+
+  // Update a family task with structured rich-text description content.
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
+
+  // Delete a family task.
+  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+
+  // Mark a task open, completed, or cancelled.
+  rpc MarkTaskStatus(MarkTaskStatusRequest) returns (MarkTaskStatusResponse);
+
+  // Upload an image or document attachment for a task.
+  rpc DownloadTaskDocument(DownloadTaskDocumentRequest) returns (DownloadTaskDocumentResponse);
+  rpc UploadTaskDocument(UploadTaskDocumentRequest) returns (UploadTaskDocumentResponse);
+
+  // Set the caller's profile picture.
+  rpc SetAvatar(SetAvatarRequest) returns (SetAvatarResponse);
+
+  // Fetch a member's profile picture.
+  rpc GetAvatar(GetAvatarRequest) returns (GetAvatarResponse);
+
+  // Set the caller's family's picture.
+  rpc SetFamilyAvatar(SetFamilyAvatarRequest) returns (SetFamilyAvatarResponse);
+
+  // Fetch a family's picture.
+  rpc GetFamilyAvatar(GetFamilyAvatarRequest) returns (GetFamilyAvatarResponse);
+
+  // Register a device with the server before opening long-lived channels.
+  rpc RegisterDevice(RegisterDeviceRequest) returns (RegisterDeviceResponse);
+
+  // Bidirectional signaling channel used to negotiate WebRTC peer connections.
+  // Media bytes should flow over WebRTC data/media channels after negotiation,
+  // not through gRPC.
+  rpc SignalWebRtc(stream WebRtcSignal) returns (stream WebRtcSignal);
+
+  // Exchange an OIDC authorization code for a session. The SPA redirects the
+  // browser to the provider, then hands the returned code + PKCE verifier to
+  // this server, which performs the token exchange with the provider's client
+  // secret (kept server-side) and returns the user + access token.
+  rpc ExchangeAuthCode(ExchangeAuthCodeRequest) returns (ExchangeAuthCodeResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  string version = 2;
+}
+
+message CreateAccountRequest {
+  string display_name = 1;
+  AccountRole role = 2;
+  optional string email = 3;
+}
+
+message CreateAccountResponse {
+  Account account = 1;
+}
+
+message GetAccountRequest {
+  string account_id = 1;
+}
+
+message GetAccountResponse {
+  // The matching account, or unset when no account has that id.
+  optional Account account = 1;
+}
+
+message CreateFamilyRequest {
+  string name = 1;
+}
+
+message CreateFamilyResponse {
+  Family family = 1;
+}
+
+message GetMyFamilyRequest {}
+
+message GetMyFamilyResponse {
+  // The caller's family, or unset when they are not yet a member of one.
+  optional Family family = 1;
+}
+
+message RenameFamilyRequest {
+  // The new family name.
+  string name = 1;
+}
+
+message RenameFamilyResponse {
+  Family family = 1;
+}
+
+message UpdateFamilyDescriptionRequest {
+  // The new "Who we are" description.
+  string description = 1;
+}
+
+message UpdateFamilyDescriptionResponse {
+  Family family = 1;
+}
+
+message AddFamilyMemberRequest {
+  string family_id = 1;
+  string account_id = 2;
+  FamilyMemberRole role = 3;
+}
+
+message AddFamilyMemberResponse {
+  FamilyMember member = 1;
+}
+
+message SetFamilyRelationshipRequest {
+  string family_id = 1;
+  string account_id = 2;
+  string relationship = 3;
+  string reciprocal_relationship = 4;
+}
+
+message SetFamilyRelationshipResponse {}
+
+message ListFamilyMembersRequest {
+  string family_id = 1;
+}
+
+message ListFamilyMembersResponse {
+  repeated FamilyMember members = 1;
+}
+
+message Family {
+  string id = 1;
+  string name = 2;
+  string created_at = 3;
+  // A short "Who we are" description of the family.
+  string description = 4;
+}
+
+message FamilyMember {
+  string id = 1;
+  string family_id = 2;
+  string account_id = 3;
+  FamilyMemberRole role = 4;
+  string created_at = 5;
+  // Labels relative to the authenticated caller; empty for older/unset records.
+  string relationship = 6;
+  string reciprocal_relationship = 7;
+}
+
+enum FamilyMemberRole {
+  FAMILY_MEMBER_ROLE_UNSPECIFIED = 0;
+  FAMILY_MEMBER_ROLE_ADMIN = 1;
+  FAMILY_MEMBER_ROLE_MEMBER = 2;
+}
+
+message Account {
+  string id = 1;
+  string display_name = 2;
+  AccountRole role = 3;
+  optional string email = 4;
+  string created_at = 5;
+  string updated_at = 6;
+}
+
+enum AccountRole {
+  ACCOUNT_ROLE_UNSPECIFIED = 0;
+  ACCOUNT_ROLE_PARENT = 1;
+  ACCOUNT_ROLE_KID = 2;
+  ACCOUNT_ROLE_GRANDPARENT = 3;
+}
+
+message TaskRichTextDocument {
+  // ProseMirror/Tiptap JSON document serialized as a string so the server can
+  // preserve editor content without taking a dependency on the editor schema.
+  string doc_json = 1;
+  // Plain-text projection for search, notification previews, and low-capability clients.
+  string text = 2;
+}
+
+message Task {
+  string id = 1;
+  string family_id = 2;
+  string title = 3;
+  TaskRichTextDocument description = 4;
+  repeated string assignee_account_ids = 5;
+  repeated string reviewer_account_ids = 12;
+  optional string start_at = 6;
+  optional string end_at = 13;
+  TaskRepeat repeat = 7;
+  TaskStatus status = 8;
+  string created_at = 9;
+  string updated_at = 10;
+  repeated TaskDocument documents = 11;
+  repeated string assignee_profile_ids = 14;
+  bool is_chore = 15;
+}
+
+enum TaskRepeat {
+  TASK_REPEAT_UNSPECIFIED = 0;
+  TASK_REPEAT_NONE = 1;
+  TASK_REPEAT_DAILY = 2;
+  TASK_REPEAT_WEEKLY = 3;
+  TASK_REPEAT_MONTHLY = 4;
+  TASK_REPEAT_YEARLY = 5;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_TODO = 1;
+  TASK_STATUS_IN_PROGRESS = 2;
+  TASK_STATUS_IN_REVIEW = 3;
+  TASK_STATUS_REJECTED = 4;
+  TASK_STATUS_COMPLETED = 5;
+  TASK_STATUS_CANCELLED = 6;
+}
+
+message ListTasksRequest {
+  string family_id = 1;
+}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+}
+
+message CreateTaskRequest {
+  string family_id = 1;
+  string title = 2;
+  TaskRichTextDocument description = 3;
+  repeated string assignee_account_ids = 4;
+  repeated string reviewer_account_ids = 7;
+  optional string start_at = 5;
+  optional string end_at = 8;
+  TaskRepeat repeat = 6;
+  repeated string assignee_profile_ids = 9;
+  bool is_chore = 10;
+}
+
+message CreateTaskResponse {
+  Task task = 1;
+}
+
+message UpdateTaskRequest {
+  string task_id = 1;
+  string title = 2;
+  TaskRichTextDocument description = 3;
+  repeated string assignee_account_ids = 4;
+  repeated string reviewer_account_ids = 7;
+  optional string start_at = 5;
+  optional string end_at = 8;
+  TaskRepeat repeat = 6;
+  repeated string assignee_profile_ids = 9;
+  optional bool update_profile_assignees = 10;
+  optional bool is_chore = 11;
+}
+
+message UpdateTaskResponse {
+  Task task = 1;
+}
+
+message DeleteTaskRequest {
+  string task_id = 1;
+}
+
+message DeleteTaskResponse {}
+
+message MarkTaskStatusRequest {
+  string task_id = 1;
+  TaskStatus status = 2;
+}
+
+message MarkTaskStatusResponse {
+  Task task = 1;
+}
+
+message TaskDocument {
+  string id = 1;
+  string task_id = 2;
+  string object_key = 3; // Deprecated: always empty in responses.
+  string name = 4;
+  string content_type = 5;
+  int64 size = 6;
+  string url = 7; // Deprecated: use authenticated DownloadTaskDocument.
+  bool image = 8;
+  string uploaded_at = 9;
+}
+
+// IDs are references only. No storage key or URL is accepted from callers.
+message DownloadTaskDocumentRequest {
+  string task_id = 1;
+  string document_id = 2;
+}
+message DownloadTaskDocumentResponse {
+  bytes content = 1;
+  string content_type = 2;
+  string name = 3;
+}
+message UploadTaskDocumentRequest {
+  string task_id = 1;
+  string name = 2;
+  string content_type = 3;
+  bytes content = 4;
+  bool image = 5;
+}
+
+message UploadTaskDocumentResponse {
+  TaskDocument document = 1;
+}
+
+message SetAvatarRequest {
+  // Raw image bytes (PNG, JPEG, or WebP). The account id of the caller is
+  // taken from the bearer token, so no account_id field is needed here.
+  bytes image = 1;
+  // MIME type of the image, e.g. "image/png".
+  string content_type = 2;
+}
+
+message SetAvatarResponse {
+  // Always true on success. Present so the gRPC-Web response body carries a
+  // message frame (tonic-web omits the trailer for an empty body, which
+  // connect-web rejects as "missing trailer").
+  bool ok = 1;
+}
+
+message GetAvatarRequest {
+  // The account id (Rauthy sub) whose picture to fetch.
+  string account_id = 1;
+}
+
+message GetAvatarResponse {
+  // Raw image bytes, or empty when the account has no picture.
+  bytes image = 1;
+  // MIME type of the image, or empty when no picture is set.
+  string content_type = 2;
+}
+
+message SetFamilyAvatarRequest {
+  // Raw image bytes (PNG, JPEG, or WebP). The caller's family is resolved
+  // from the bearer token, so no family_id field is needed here.
+  bytes image = 1;
+  // MIME type of the image, e.g. "image/png".
+  string content_type = 2;
+}
+
+message SetFamilyAvatarResponse {
+  // Always true on success. Present so the gRPC-Web response body carries a
+  // message frame (tonic-web omits the trailer for an empty body, which
+  // connect-web rejects as "missing trailer").
+  bool ok = 1;
+}
+
+message GetFamilyAvatarRequest {
+  // The family id whose picture to fetch.
+  string family_id = 1;
+}
+
+message GetFamilyAvatarResponse {
+  // Raw image bytes, or empty when the family has no picture.
+  bytes image = 1;
+  // MIME type of the image, or empty when no picture is set.
+  string content_type = 2;
+}
+
+message RegisterDeviceRequest {
+  string device_id = 1;
+  string display_name = 2;
+}
+
+message RegisterDeviceResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message WebRtcSignal {
+  string session_id = 1;
+  string source_device_id = 2;
+  string target_device_id = 3;
+  WebRtcSignalKind kind = 4;
+  string payload_json = 5;
+}
+
+enum WebRtcSignalKind {
+  WEB_RTC_SIGNAL_KIND_UNSPECIFIED = 0;
+  WEB_RTC_SIGNAL_KIND_OFFER = 1;
+  WEB_RTC_SIGNAL_KIND_ANSWER = 2;
+  WEB_RTC_SIGNAL_KIND_ICE_CANDIDATE = 3;
+  WEB_RTC_SIGNAL_KIND_CLOSE = 4;
+}
+
+message ExchangeAuthCodeRequest {
+  string flow_id = 4;
+  optional string child_session_token = 5;
+  // The authorization code returned by the provider's redirect.
+  string code = 1;
+  // The PKCE code_verifier the SPA generated for this authorization request.
+  string code_verifier = 2;
+  // The redirect_uri that was used in the authorization request.
+  string redirect_uri = 3;
+}
+
+message ExchangeAuthCodeResponse {
+  string expires_at = 9;
+  // The authenticated user's stable account id (the OIDC `sub`).
+  string account_id = 1;
+  // The user's display name, when the provider returned one.
+  string display_name = 2;
+  // The user's email, when the provider returned one.
+  string email = 3;
+  // Revocable Vulture session credential; never the provider's access token.
+  string access_token = 4;
+  // Legacy wire field, always empty. Provider ID tokens are not sent to clients.
+  string id_token = 5;
+  // The user's first name (given_name), when the provider returned one.
+  string given_name = 6;
+  // The user's last name (family_name), when the provider returned one.
+  string family_name = 7;
+  // The user's profile picture URL, when the provider returned one.
+  string picture = 8;
+}
+
+enum LearningAgeBand {
+  LEARNING_AGE_BAND_UNSPECIFIED = 0;
+  LEARNING_AGE_BAND_EARLY_YEARS = 1; // Ages 3–5.
+  LEARNING_AGE_BAND_PRIMARY = 2; // Ages 6–8.
+  LEARNING_AGE_BAND_PRETEEN = 3; // Ages 9–12.
+  LEARNING_AGE_BAND_TEEN = 4; // Ages 13–17.
+}
+message LearningProfile {
+  string id = 1;
+  string family_id = 2;
+  string display_name = 3;
+  LearningAgeBand age_band = 4;
+  string grade = 5;
+  repeated string guardian_account_ids = 6;
+  string created_at = 7;
+  LearningProgression progression = 8;
+}
+message UpdateLearningProgressionRequest {
+  string profile_id = 1;
+  string grade = 2;
+  LearningProgression progression = 3;
+  optional string display_name = 4;
+}
+message LearningProgression {
+  string date_of_birth = 1;
+  bool auto_grade = 2;
+  uint32 school_year_month = 3;
+  uint32 school_year_day = 4;
+  string country = 5;
+  string region = 6;
+}
+message CreateLearningProfileRequest {
+  string family_id = 1;
+  string display_name = 2;
+  LearningAgeBand age_band = 3;
+  string grade = 4;
+  LearningProgression progression = 5;
+}
+message CreateLearningProfileResponse {
+  LearningProfile profile = 1;
+}
+message ListLearningProfilesRequest {
+  string family_id = 1;
+}
+message ListLearningProfilesResponse {
+  repeated LearningProfile profiles = 1;
+}
+message GetLearningProfileRequest {
+  string profile_id = 1;
+}
+message GetLearningProfileResponse {
+  LearningProfile profile = 1;
+}
+message AddLearningGuardianRequest {
+  string profile_id = 1;
+  string guardian_account_id = 2;
+}
+message AddLearningGuardianResponse {
+  LearningProfile profile = 1;
+}
+
+message RemoveLearningGuardianRequest {
+  string profile_id = 1;
+  string guardian_account_id = 2;
+}
+message RemoveLearningGuardianResponse {
+  LearningProfile profile = 1;
+}
+
+message BeginParentSignInRequest {
+  string redirect_uri = 1;
+  string code_challenge = 2;
+}
+message BeginParentSignInResponse {
+  string flow_id = 1;
+  string nonce = 2;
+  string expires_at = 3;
+}
+message GetParentSessionRequest {}
+message GetParentSessionResponse {
+  string account_id = 1;
+  string display_name = 2;
+  string email = 3;
+  string given_name = 4;
+  string family_name = 5;
+  string picture = 6;
+  string expires_at = 7;
+}
+message StartChildSessionRequest {
+  string profile_id = 1;
+}
+message ChildSessionContext {
+  string profile_id = 1;
+  string family_id = 2;
+  string display_name = 3;
+  string expires_at = 4;
+}
+message StartChildSessionResponse {
+  string session_token = 1;
+  ChildSessionContext context = 2;
+}
+message GetChildSessionRequest {}
+message GetChildSessionResponse {
+  ChildSessionContext context = 1;
+}
+message RevokeSessionRequest {}
+message RevokeSessionResponse {
+  bool ok = 1;
+}
+
+// Stable v1 polling contract. No document text, storage keys or provider errors.
+enum LearningJobState {
+  LEARNING_JOB_STATE_UNSPECIFIED = 0;
+  LEARNING_JOB_STATE_QUEUED = 1;
+  LEARNING_JOB_STATE_RUNNING = 2;
+  LEARNING_JOB_STATE_SUCCEEDED = 3;
+  LEARNING_JOB_STATE_FAILED = 4;
+  LEARNING_JOB_STATE_CANCELLED = 5;
+}
+message LearningJob {
+  string id = 1;
+  string family_id = 2;
+  string profile_id = 3;
+  string source_id = 4;
+  int32 source_version = 5;
+  LearningJobState state = 6;
+  int32 attempts = 7;
+  string created_at = 8;
+  string updated_at = 9;
+}
+message GetLearningJobRequest {
+  string job_id = 1;
+}
+message GetLearningJobResponse {
+  LearningJob job = 1;
+}
+message CancelLearningJobRequest {
+  string job_id = 1;
+}
+message CancelLearningJobResponse {
+  LearningJob job = 1;
+}
+
+// Strict, versioned call command JSON validated by the application service.
+message FamilyCallRequest {
+  string command_json = 1;
+}
+message FamilyCallResponse {
+  string result_json = 1;
+}
+
+// Strict versioned mailbox commands; validated by the application service.
+message ParentMailboxRequest {
+  string profile_id = 1;
+  string command_json = 2;
+}
+message ParentMailboxResponse {
+  string result_json = 1;
+}
+
+// Voice commands are strictly decoded and authorized by the application service.
+message VoiceAssistantRequest {
+  string command_json = 1;
+}
+message VoiceAssistantResponse {
+  string result_json = 1;
+}
+
+message FamilyResourcesRequest {
+  string command_json = 1;
+}
+message FamilyResourcesResponse {
+  string result_json = 1;
+}
+
+// Guardian-only access configuration. PINs are never returned.
+message GetChildPinAccessRequest {
+  string profile_id = 1;
+}
+message SetChildPinRequest {
+  string profile_id = 1;
+  // Exactly six digits; empty disables access and revokes child sessions.
+  string pin = 2;
+}
+message ChildPinAccess {
+  bool enabled = 1;
+  string login_id = 2;
+}
+message SignInChildRequest {
+  string login_id = 1;
+  string pin = 2;
+  // A signed-in child switching to a sibling: set instead of login_id, with the
+  // child session as bearer. Only profiles in the caller's family are found.
+  string profile_id = 3;
+}
+
+message GetAccountSetupRequest {}
+message AccountSetupState {
+  AccountRole role = 1;
+  bool dob_confirmed = 2;
+  bool completed = 3;
+}
+message UpdateAccountSetupRequest {
+  AccountRole role = 1;
+  // Transient confirmation input; the server does not retain this value.
+  string date_of_birth = 2;
+  bool complete = 3;
+}
+
+message GetParentPinAccessRequest {}
+message SetParentPinRequest {
+  string pin = 1;
+  // Required to replace or remove an existing PIN, unless the parent signed in
+  // again within the last 10 minutes to reset a forgotten PIN.
+  string current_pin = 2;
+}
+message ParentPinAccess {
+  bool enabled = 1;
+}
+message UnlockParentRequest {
+  string pin = 1;
+}
+
+message VerifyParentPinRequest {
+  string pin = 1;
+}
+
+message VerifyParentPinResponse {}
+
+message LearningTeacher {
+  string name = 1;
+  string role = 2;
+  string email = 3;
+  string phone = 4;
+}
+message LearningSchool {
+  string name = 1;
+  string address = 2;
+  repeated string phones = 3;
+  string email = 4;
+  repeated LearningTeacher teachers = 5;
+}
+message GetLearningSchoolRequest {
+  string profile_id = 1;
+}
+message SaveLearningSchoolRequest {
+  string profile_id = 1;
+  LearningSchool school = 2;
+}
+
+message ListChildTasksRequest {}
+message MarkChildTaskStatusRequest {
+  string task_id = 1;
+  TaskStatus status = 2;
+}
+message SetProfileAvatarRequest {
+  // Ignored for child sessions, which may only change their own picture.
+  string profile_id = 1;
+  // PNG, JPEG or WebP up to 1 MiB; empty clears the picture.
+  bytes image = 2;
+  string content_type = 3;
+}
+message GetProfileAvatarRequest {
+  string profile_id = 1;
+}
+message GetQuestionAudioRequest {
+  string session_id = 1;
+  // Must be the session's current question.
+  int32 position = 2;
+}
+message GetQuestionAudioResponse {
+  bytes audio = 1;
+  string content_type = 2;
+}
+message ListChildFamilyRequest {}
+message ChildFamilyMember {
+  // An account id, or "profile:<uuid>" for a child's learning profile; the same
+  // identity chat rosters and call devices use.
+  string participant_id = 1;
+  string display_name = 2;
+  // A child's learning profile rather than an account.
+  bool child = 3;
+  // A family admin parent who can approve chat devices.
+  bool guardian = 4;
+}
+message ListChildFamilyResponse {
+  repeated ChildFamilyMember members = 1;
+}

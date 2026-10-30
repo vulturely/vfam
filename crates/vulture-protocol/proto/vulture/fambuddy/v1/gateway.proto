@@ -1,0 +1,493 @@
+syntax = "proto3";
+package vulture.fambuddy.v1;
+
+// Native clients use gRPC over TLS; browser clients use gRPC-Web on the same service.
+// Parent and device bearer credentials are distinct. Only pairing accepts no bearer.
+service FamBuddyGatewayService {
+  rpc EnableRemote(EnableRemoteRequest) returns (EnableRemoteResponse);
+  rpc DisableRemote(DisableRemoteRequest) returns (DisableRemoteResponse);
+  rpc PairPhone(PairPhoneRequest) returns (PairPhoneResponse);
+  rpc ParentCommand(ParentCommandRequest) returns (ParentCommandResponse);
+  rpc DeviceCommand(DeviceCommandRequest) returns (DeviceCommandResponse);
+  rpc WatchParent(WatchParentRequest) returns (stream WatchParentResponse);
+  rpc WatchDevice(WatchDeviceRequest) returns (stream WatchDeviceResponse);
+  rpc OpenTalk(OpenTalkRequest) returns (stream OpenTalkResponse);
+  // The family server's voice for the device's current approved answer or a fixed cue.
+  // Unavailable means the device speaks with its own voice instead.
+  rpc SpeakDevice(SpeakDeviceRequest) returns (stream SpeakDeviceResponse);
+}
+message PairPhoneRequest {
+  string code = 1;
+}
+message PairPhoneResponse {
+  string token = 1;
+  string family = 2;
+  string expires_at = 3;
+}
+message ParentCommandRequest {
+  oneof command {
+    ListDevices list = 1;
+    ConfigureDevice configure = 2;
+    ApproveTurn approve = 3;
+    EditTurn edit = 4;
+    CancelTurn cancel = 5;
+    Announce announce = 6;
+    SaveProvider save_provider = 7;
+    DeviceTarget revoke = 8;
+    DeviceTarget start_talk = 9;
+    ParentTalk talk = 10;
+    StopTalk stop_talk = 11;
+    NoArguments logout = 12;
+    ConfigureCamera configure_camera = 13;
+    AnswerTurn answer = 14;
+    ConfigureCaptions configure_captions = 15;
+    AskBuddy ask = 16;
+    ConfigureScreenPin configure_screen_pin = 17;
+    ConfigureUpdates configure_updates = 18;
+    DeviceTarget install_update = 19;
+    ReviseTurn revise = 20;
+    LabelVoice label_voice = 21;
+    InstallLicense install_license = 22;
+    ConfigureAiMode configure_ai_mode = 23;
+    AskCloud ask_cloud = 24;
+  }
+}
+message ParentCommandResponse {
+  GatewayOutput output = 1;
+}
+message DeviceCommandRequest {
+  oneof command {
+    NoArguments voices = 1;
+    SubmitQuestion submit = 2;
+    NoArguments poll = 3;
+    TurnTarget playback_status = 4;
+    TurnTarget complete = 5;
+    DeviceTalk talk = 6;
+    TalkDescription talk_answer = 7;
+    ScreenPin verify_screen_pin = 8;
+    ReportVersions report_versions = 9;
+    // A basic action the device did by voice without AI (the time, a timer, the
+    // volume, a calculation): its spoken reply, shown to parents as a caption.
+    ActionSpoken action_spoken = 10;
+  }
+}
+message DeviceCommandResponse {
+  GatewayOutput output = 1;
+}
+message NoArguments {}
+message ListDevices {
+  string family = 1;
+}
+message DeviceTarget {
+  string device = 1;
+}
+message TurnTarget {
+  string turn = 1;
+}
+message ConfigureDevice {
+  string device = 1;
+  string wake_word = 2;
+  bool muted = 3;
+}
+message ConfigureCamera {
+  string device = 1;
+  bool enabled = 2;
+}
+message ApproveTurn {
+  string device = 1;
+  string turn = 2;
+  bytes review = 3; // Exact 32-byte review digest; never a parent credential.
+}
+message EditTurn {
+  string device = 1;
+  string turn = 2;
+  string text = 3;
+}
+
+// A parent asks for a different answer: the pending answer goes back to the AI that
+// wrote it, with the original question, that answer and this instruction. The new
+// answer waits for approval again.
+message ReviseTurn {
+  string device = 1;
+  string turn = 2;
+  string instruction = 3;
+}
+
+// A FamBuddy license issued by the Swavan App Platform (SAP): a signed token for the
+// audience "fambuddy". The hub verifies it with SAP's pinned FamBuddy public key; an
+// empty token removes the license. Paid features follow the token's feature ids.
+message InstallLicense {
+  string device = 1;
+  string token = 2;
+}
+
+enum LicenseState {
+  LICENSE_STATE_UNSPECIFIED = 0;
+  LICENSE_STATE_NONE = 1;
+  LICENSE_STATE_VALID = 2;
+  LICENSE_STATE_EXPIRED = 3;
+}
+
+// Never carries the token itself.
+message LicenseStatus {
+  LicenseState state = 1;
+  string edition = 2;
+  // Feature ids such as "fambuddy.on_device_ai"; empty unless VALID.
+  repeated string features = 3;
+  // RFC 3339; empty without a license.
+  string expires_at = 4;
+}
+
+// How a FamBuddy answers a parent's questions. A child's question (or an unlabelled
+// voice's) is only ever answered by the on-device AI; a parent may then choose
+// AskCloud for it.
+enum AiMode {
+  // In a request: back to the default (local only without a provider, local first with one).
+  AI_MODE_UNSPECIFIED = 0;
+  AI_MODE_LOCAL_ONLY = 1;
+  // On-device AI, then the configured provider when it cannot answer.
+  AI_MODE_LOCAL_FIRST = 2;
+  AI_MODE_CLOUD_ONLY = 3;
+}
+
+message ConfigureAiMode {
+  string device = 1;
+  AiMode mode = 2;
+}
+
+// A parent sends a turn waiting for them (TURN_STAGE_NEEDS_PARENT, after the on-device AI
+// could not answer) to the provider configured for the device. The answer then waits for
+// approval as usual, answered by CLOUD.
+message AskCloud {
+  string device = 1;
+  string turn = 2;
+}
+
+// Who an enrolled voice belongs to. An unlabelled voice is treated as a child.
+message LabelVoice {
+  string device = 1;
+  string speaker = 2;
+  string name = 3;
+  AskerRole role = 4;
+}
+
+message VoiceLabel {
+  string speaker = 1;
+  string name = 2;
+  AskerRole role = 3;
+}
+
+enum AskerRole {
+  ASKER_ROLE_UNSPECIFIED = 0;
+  ASKER_ROLE_CHILD = 1;
+  ASKER_ROLE_PARENT = 2;
+}
+
+// Where a request came from, shown to parents with every review.
+message TurnOrigin {
+  // The labelled name of the voice, or the parent's name for a parent's own question.
+  string name = 1;
+  AskerRole role = 2;
+  // "voice" (asked aloud on the FamBuddy) or "app" (a parent's question from VFAM).
+  string channel = 3;
+}
+
+enum AnswerSource {
+  ANSWER_SOURCE_UNSPECIFIED = 0;
+  // The FamBuddy's configured AI provider.
+  ANSWER_SOURCE_PROVIDER = 1;
+  // Family AI on the approving parent's device.
+  ANSWER_SOURCE_PARENT_DEVICE = 2;
+  // The FamBuddy's own on-device model.
+  ANSWER_SOURCE_LOCAL = 3;
+  // A cloud provider, used only when a parent chose it.
+  ANSWER_SOURCE_CLOUD = 4;
+  // A parent typed or edited the answer.
+  ANSWER_SOURCE_PARENT = 5;
+}
+
+// Answer produced on a parent device for a parent-approved question when the
+// device uses "parent_device" family AI. The parent still reviews the answer.
+message AnswerTurn {
+  string device = 1;
+  string turn = 2;
+  string text = 3;
+}
+message CancelTurn {
+  string device = 1;
+  string turn = 2;
+}
+message Announce {
+  string device = 1;
+  string text = 2;
+}
+
+// Whether the device's own screen shows what is said, and whether parents see live captions.
+message ConfigureCaptions {
+  string device = 1;
+  bool enabled = 2;
+}
+
+// A parent's question for the device's AI. It is approved by asking it; the answer
+// still needs the parent's approval before it is spoken.
+message AskBuddy {
+  string device = 1;
+  string text = 2;
+}
+
+// The PIN a grown-up enters on the device's own screen before changing its Wi-Fi.
+// Four to eight digits; an empty pin removes it. Only a salted hash is kept.
+message ConfigureScreenPin {
+  string device = 1;
+  string pin = 2;
+}
+
+// A device asks the hub to check a PIN entered on its screen. A wrong PIN is
+// PERMISSION_DENIED; too many wrong tries in a row is RESOURCE_EXHAUSTED.
+message ScreenPin {
+  string pin = 1;
+}
+
+// Whether a device installs signed updates on its own (off unless a parent turns it on).
+message ConfigureUpdates {
+  string device = 1;
+  bool automatic = 2;
+}
+
+// What the device's updater last saw. Versions are release tags such as "v0.1.57";
+// empty when unknown.
+message ReportVersions {
+  string installed = 1;
+  string available = 2;
+  UpdateState state = 3;
+}
+
+enum UpdateState {
+  UPDATE_STATE_UNSPECIFIED = 0;
+  UPDATE_STATE_CURRENT = 1;
+  UPDATE_STATE_AVAILABLE = 2;
+  UPDATE_STATE_INSTALLING = 3;
+  UPDATE_STATE_FAILED = 4;
+}
+message ProviderConfig {
+  string provider = 1;
+  string model = 2;
+  string endpoint = 3;
+  string api_key = 4;
+  int64 max_microusd_per_token = 5;
+  string revision = 6;
+  string destination = 7;
+  string generation = 8;
+}
+message SaveProvider {
+  string device = 1;
+  ProviderConfig config = 2;
+}
+message ParentTalk {
+  string device = 1;
+  string session = 2;
+  optional bytes pcm = 3; // Bounded transient 16-kHz mono S16_LE audio, only under a live lease.
+}
+message StopTalk {
+  string device = 1;
+  string session = 2;
+}
+
+// What the device said for a basic action (docs/local-ai.md, "Basic actions"). Never
+// stored; at most 300 bytes.
+message ActionSpoken {
+  string text = 1;
+}
+message SubmitQuestion {
+  string speaker = 1;
+  string turn = 2;
+  string session = 3;
+  string text = 4;
+  // Set when the request ("read this", "help me with this") was about a page held up to
+  // the device's camera: what the device read from it. Needs the camera on and a
+  // license with on-device AI.
+  CameraReading reading = 5;
+}
+
+// What to do with a page read by the device's camera.
+enum ReadingTask {
+  READING_TASK_UNSPECIFIED = 0;
+  // Say the text itself, once a parent approves it.
+  READING_TASK_READ_OUT = 1;
+  // Answer the request about the text, routed like any question.
+  READING_TASK_HELP = 2;
+}
+
+// Text a device read on its own from one photo of a page. The photo itself never leaves
+// the device and is deleted as soon as it is read.
+message CameraReading {
+  ReadingTask task = 1;
+  // Cleaned and at most 600 bytes.
+  string text = 2;
+}
+message DeviceTalk {
+  string session = 1;
+  optional bytes pcm = 2;
+}
+message GatewayOutput {
+  repeated Speaker voices = 1;
+  repeated DeviceSettings settings = 2;
+  repeated TurnReview turns = 3;
+  optional Playback playback = 4;
+  bool playback_allowed = 5;
+  optional string talk = 6;
+  repeated bytes audio = 7;
+  optional TalkDescription talk_offer = 8;
+  optional string authorized_playback = 9;
+  // What each of the family's devices is saying now, for devices with captions on.
+  repeated Caption captions = 10;
+  // Parents only: who each enrolled voice belongs to.
+  repeated VoiceLabel voice_labels = 11;
+}
+message Caption {
+  string device = 1;
+  string turn = 2;
+  string text = 3;
+  string started_at = 4;
+}
+message Speaker {
+  string id = 1;
+  repeated SpeakerSample samples = 2;
+}
+message SpeakerSample {
+  repeated double values = 1;
+}
+message DeviceSettings {
+  string device = 1;
+  string wake_word = 2;
+  bool muted = 3;
+  bool camera_enabled = 4;
+  bool captions_enabled = 5;
+  bool screen_pin_set = 6;
+  bool auto_update = 7;
+  string installed_version = 8;
+  string available_version = 9;
+  UpdateState update_state = 10;
+  // A parent asked for the available update now; cleared once the device reports
+  // installing it, or a failure.
+  bool update_requested = 11;
+  LicenseStatus license = 12;
+  // The mode in effect: the parent's choice, or the default when none was made.
+  AiMode ai_mode = 13;
+  // On-device AI can answer now: allowed by the hardware, licensed, and its model running.
+  bool local_ai = 14;
+}
+message TurnScope {
+  string family = 1;
+  string speaker = 2;
+  string device = 3;
+  string session = 4;
+  string turn = 5;
+  string destination_revision = 6;
+}
+enum TurnStage {
+  TURN_STAGE_UNSPECIFIED = 0;
+  TURN_STAGE_QUESTION_PENDING = 1;
+  TURN_STAGE_QUESTION_APPROVED = 2;
+  TURN_STAGE_AWAITING_ANSWER = 3;
+  TURN_STAGE_ANSWER_PENDING = 4;
+  TURN_STAGE_ANSWER_APPROVED = 5;
+  TURN_STAGE_PLAYBACK_CLAIMED = 6;
+  TURN_STAGE_CANCELLED = 7;
+  // The on-device AI could not answer a child's question; the FamBuddy said so and the
+  // turn waits for a parent to answer it, edit it into an answer, ask the cloud or cancel.
+  TURN_STAGE_NEEDS_PARENT = 8;
+}
+message TurnReview {
+  TurnScope scope = 1;
+  TurnStage stage = 2;
+  string text = 3;
+  optional bytes review = 4;
+  string expires_at = 5;
+  string destination = 6;
+  TurnOrigin origin = 7;
+  AnswerSource answered_by = 8;
+}
+message Playback {
+  string turn = 1;
+  string text = 2;
+  string expires_at = 3;
+}
+
+message WatchParentRequest {
+  string family = 1;
+}
+message WatchParentResponse {
+  GatewayOutput output = 1;
+}
+message WatchDeviceRequest {}
+message WatchDeviceResponse {
+  GatewayOutput output = 1;
+}
+
+message MediaIceServer {
+  repeated string urls = 1;
+  string username = 2;
+  string credential = 3;
+}
+message TalkDescription {
+  string session = 1;
+  string sdp = 2;
+  bool video = 3;
+  repeated MediaIceServer ice_servers = 4;
+}
+message OpenTalkRequest {
+  string device = 1;
+  string offer = 2;
+  bool video = 3;
+  repeated MediaIceServer ice_servers = 4;
+}
+message OpenTalkResponse {
+  string session = 1;
+  optional string answer = 2;
+}
+
+message RelayPeer {
+  string account_id = 1;
+  string device_id = 2;
+  string fingerprint = 3;
+  string key_package = 4;
+}
+message EnableRemoteRequest {
+  string device = 1;
+  string channel = 2;
+  string origin = 3;
+  string device_credential = 4;
+  RelayPeer peer = 5;
+}
+message EnableRemoteResponse {
+  RelayPeer device_peer = 1;
+  string welcome = 2;
+}
+message DisableRemoteRequest {
+  string channel = 1;
+}
+message DisableRemoteResponse {}
+message SpeakDeviceRequest {
+  oneof speech {
+    SpokenAnswer answer = 1;
+    SpokenCue cue = 2;
+  }
+}
+
+// Only the answer whose playback this device currently holds may be spoken.
+message SpokenAnswer {
+  string turn = 1;
+  string text = 2;
+}
+enum SpokenCue {
+  SPOKEN_CUE_UNSPECIFIED = 0;
+  SPOKEN_CUE_PAIRED = 1;
+  SPOKEN_CUE_LISTENING = 2;
+}
+
+// Signed 16-bit little-endian mono PCM, in pieces small enough for the device.
+message SpeakDeviceResponse {
+  bytes pcm = 1;
+  uint32 sample_rate = 2;
+}

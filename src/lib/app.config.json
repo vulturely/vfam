@@ -1,0 +1,4 @@
+{
+	"serverUrl": "https://vulture.swavan.com",
+	"desktopRedirectUri": "http://127.0.0.1:7793/login/callback"
+}
